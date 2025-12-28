@@ -54,10 +54,13 @@ def detection_performance(regressor, X, Y, outf):
     Measure the detection performance
     return: detection metrics
     """
+    print(X.shape)
     num_samples = X.shape[0]
     l1 = open('%s/confidence_TMP_In.txt'%outf, 'w')
     l2 = open('%s/confidence_TMP_Out.txt'%outf, 'w')
-    y_pred = regressor.predict_proba(X)[:, 1]
+    # y_pred = regressor.predict_proba(X)[:, 0] #RPS
+    y_pred = regressor.predict_proba(X)[:, 1] #LR
+    # print(regressor.predict_proba(X).size)
 
     for i in range(num_samples):
         if Y[i] == 0:
@@ -68,7 +71,7 @@ def detection_performance(regressor, X, Y, outf):
     l2.close()
     results = callog.metric(outf, ['TMP'])
     return results
-    
+
 def load_characteristics(score, dataset, out, outf):
     """
     Load the calculated scores

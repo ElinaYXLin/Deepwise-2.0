@@ -65,7 +65,7 @@ class DenseBlock(nn.Module):
     def forward(self, x):
         return self.layer(x)
 
-class DenseNet3(nn.Module):
+class DenseNet3(nn.Module): # read this
     def __init__(self, depth, num_classes, growth_rate=12,
                  reduction=0.5, bottleneck=True, dropRate=0.0):
         super(DenseNet3, self).__init__()

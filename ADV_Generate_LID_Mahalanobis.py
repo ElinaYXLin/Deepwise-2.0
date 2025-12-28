@@ -1,4 +1,13 @@
 """
+python ADV_Generate_LID_Mahalanobis.py  --batch_size 160 --dataset "cifar10" --num_classes 10 --net_type "densenet" --adv_type "FGSM"
+python ADV_Generate_LID_Mahalanobis.py  --batch_size 160 --dataset "cifar10" --num_classes 10 --net_type "densenet" --adv_type "BIM"
+python ADV_Generate_LID_Mahalanobis.py  --batch_size 180 --dataset "cifar10" --num_classes 10 --net_type "densenet" --adv_type "DeepFool"
+python ADV_Generate_LID_Mahalanobis.py  --batch_size 180 --dataset "cifar10" --num_classes 10 --net_type "densenet" --adv_type "CWL2"
+
+python ADV_Generate_LID_Mahalanobis.py  --batch_size 160 --dataset "cifar100" --num_classes 100 --net_type "densenet" --adv_type "BIM"
+python ADV_Generate_LID_Mahalanobis.py  --batch_size 160 --dataset "cifar100" --num_classes 100 --net_type "densenet" --adv_type "FGSM"
+python ADV_Generate_LID_Mahalanobis.py  --batch_size 160 --dataset "cifar100" --num_classes 100 --net_type "densenet" --adv_type "DeepFool"
+0
 Created on Sun Oct 25 2018
 @author: Kimin Lee
 """
@@ -15,15 +24,17 @@ import lib_generation
 from torchvision import transforms
 from torch.autograd import Variable
 
+from torch.utils.data import TensorDataset, DataLoader
+
 parser = argparse.ArgumentParser(description='PyTorch code: Mahalanobis detector')
-parser.add_argument('--batch_size', type=int, default=200, metavar='N', help='batch size for data loader')
-parser.add_argument('--dataset', required=True, help='cifar10 | cifar100 | svhn')
+parser.add_argument('--batch_size', type=int, default=128, metavar='N', help='batch size for data loader')
+parser.add_argument('--dataset', default="svhn", help='cifar10 | cifar100 | svhn')
 parser.add_argument('--dataroot', default='./data', help='path to dataset')
 parser.add_argument('--outf', default='./adv_output/', help='folder to output results')
 parser.add_argument('--num_classes', type=int, default=10, help='the # of classes')
-parser.add_argument('--net_type', required=True, help='resnet | densenet')
+parser.add_argument('--net_type', default="densenet", help='resnet | densenet')
 parser.add_argument('--gpu', type=int, default=0, help='gpu index')
-parser.add_argument('--adv_type', required=True, help='FGSM | BIM | DeepFool | CWL2')
+parser.add_argument('--adv_type', default="CWL2", help='FGSM | BIM | DeepFool | CWL2')
 args = parser.parse_args()
 print(args)
 
@@ -41,11 +52,15 @@ def main():
         
     # load networks
     if args.net_type == 'densenet':
-        if args.dataset == 'svhn':
-            model = models.DenseNet3(100, int(args.num_classes))
-            model.load_state_dict(torch.load(pre_trained_net, map_location = "cuda:" + str(args.gpu)))
-        else:
-            model = torch.load(pre_trained_net, map_location = "cuda:" + str(args.gpu))
+        # if args.dataset == 'svhn':
+        #     model = models.DenseNet3(100, int(args.num_classes))
+        #     model.load_state_dict(torch.load(pre_trained_net, map_location = "cuda:" + str(args.gpu)))
+        #     # map location: give the ID of the GPU; this is to prevent the model from auto-loading in the saved GPU (since the loading device might have less GPUs than the saving device)
+        # else:
+        #     model = torch.load(pre_trained_net, map_location = "cuda:" + str(args.gpu))
+        model = models.DenseNet3(100, int(args.num_classes))
+        model.load_state_dict(torch.load(pre_trained_net, map_location = "cuda:" + str(args.gpu)), strict=False)
+
         in_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((125.3/255, 123.0/255, 113.9/255), (63.0/255, 62.1/255.0, 66.7/255.0)),])
     elif args.net_type == 'resnet':
         model = models.ResNet34(num_c=args.num_classes)
@@ -66,7 +81,7 @@ def main():
     model.eval()
     temp_x = torch.rand(2,3,32,32).cuda()
     temp_x = Variable(temp_x)
-    temp_list = model.feature_list(temp_x)[1]
+    temp_list = model.feature_list(temp_x)[1]  # feature list: the results after each layer
     num_output = len(temp_list)
     feature_list = np.empty(num_output)
     count = 0
@@ -74,8 +89,11 @@ def main():
         feature_list[count] = out.size(1)
         count += 1
         
-    print('get sample mean and covariance')
+    print('get sample mean and covariance') # precision below just means covariance
     sample_mean, precision = lib_generation.sample_estimator(model, args.num_classes, feature_list, train_loader)
+
+    # print(test_clean_data.size())
+    # assert 1==0
     
     print('get LID scores')
     LID, LID_adv, LID_noisy \
@@ -93,7 +111,7 @@ def main():
         np.save(file_name, LID_data)
         list_counter += 1
     
-    print('get Mahalanobis scores')
+    print('get Mahalanobis scores') # PUT EDITS HERE
     m_list = [0.0, 0.01, 0.005, 0.002, 0.0014, 0.001, 0.0005]
     for magnitude in m_list:
         print('\nNoise: ' + str(magnitude))

@@ -127,7 +127,7 @@ class PreActBottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(self, block, num_blocks, num_classes=10): # override this on input to be 100
         super(ResNet, self).__init__()
         self.in_planes = 64
 
@@ -157,7 +157,7 @@ class ResNet(nn.Module):
         out = out.view(out.size(0), -1)
         y = self.linear(out)
         return y
-    
+
     # function to extact the multiple features
     def feature_list(self, x):
         out_list = []
@@ -211,7 +211,7 @@ def ResNet18(num_c):
     return ResNet(PreActBlock, [2,2,2,2], num_classes=num_c)
 
 def ResNet34(num_c):
-    return ResNet(BasicBlock, [3,4,6,3], num_classes=num_c)
+    return ResNet(BasicBlock, [3,4,6,3], num_classes=num_c) # read
 
 def ResNet50():
     return ResNet(Bottleneck, [3,4,6,3])

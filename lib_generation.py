@@ -71,6 +71,7 @@ def sample_estimator(model, num_classes, feature_list, train_loader):
         
         # get hidden features
         for i in range(num_output):
+            # line 75: first dimension is batch size, second dimension is number of channels, push rest of the dimensions together
             out_features[i] = out_features[i].view(out_features[i].size(0), out_features[i].size(1), -1)
             out_features[i] = torch.mean(out_features[i].data, 2)
             
@@ -104,12 +105,12 @@ def sample_estimator(model, num_classes, feature_list, train_loader):
         sample_class_mean.append(temp_list)
         out_count += 1
         
-    precision = []
+    precision = [] # precision the inverse of covariance
     for k in range(num_output):
         X = 0
         for i in range(num_classes):
             if i == 0:
-                X = list_features[k][i] - sample_class_mean[k][i]
+                X = list_features[k][i] - sample_class_mean[k][i] # each value of mean corresponds to a specific layer, class, and channel
             else:
                 X = torch.cat((X, list_features[k][i] - sample_class_mean[k][i]), 0)
                 
@@ -146,20 +147,26 @@ def get_Mahalanobis_score(model, test_loader, num_classes, outf, out_flag, net_t
         out_features = model.intermediate_forward(data, layer_index)
         out_features = out_features.view(out_features.size(0), out_features.size(1), -1)
         out_features = torch.mean(out_features, 2)
+
+        with torch.no_grad():
+            sample_pred = model(data).max(1)[1]
+
         
-        # compute Mahalanobis score
-        gaussian_score = 0
-        for i in range(num_classes):
-            batch_sample_mean = sample_mean[layer_index][i]
-            zero_f = out_features.data - batch_sample_mean
-            term_gau = -0.5*torch.mm(torch.mm(zero_f, precision[layer_index]), zero_f.t()).diag()
-            if i == 0:
-                gaussian_score = term_gau.view(-1,1)
-            else:
-                gaussian_score = torch.cat((gaussian_score, term_gau.view(-1,1)), 1)
+        # # compute Mahalanobis score
+        # gaussian_score = 0
+        # for i in range(num_classes):
+        #     batch_sample_mean = sample_mean[layer_index][i]
+        #     zero_f = out_features.data - batch_sample_mean
+        #     term_gau = -0.5*torch.mm(torch.mm(zero_f, precision[layer_index]), zero_f.t()).diag() # torch.mm: matrix multiplication
+        #     # the 0.5 is arbitrary, the - sign is to cancel out the max (should be min)
+        #     if i == 0:
+        #         gaussian_score = term_gau.view(-1,1)
+        #     else:
+        #         gaussian_score = torch.cat((gaussian_score, term_gau.view(-1,1)), 1)
         
         # Input_processing
-        sample_pred = gaussian_score.max(1)[1]
+        # sample_pred = gaussian_score.max(1)[1] # EDIT HERE
+
         batch_sample_mean = sample_mean[layer_index].index_select(0, sample_pred)
         zero_f = out_features - Variable(batch_sample_mean)
         pure_gau = -0.5*torch.mm(torch.mm(zero_f, Variable(precision[layer_index])), zero_f.t()).diag()
@@ -357,21 +364,21 @@ def get_LID(model, test_clean_data, test_adv_data, test_noisy_data, test_label, 
         for i in range(num_output):
             out_features[i] = out_features[i].view(out_features[i].size(0), out_features[i].size(1), -1)
             out_features[i] = torch.mean(out_features[i].data, 2)
-            X_act.append(np.asarray(out_features[i], dtype=np.float32).reshape((out_features[i].size(0), -1)))
+            X_act.append(np.asarray(out_features[i].cpu(), dtype=np.float32).reshape((out_features[i].size(0), -1)))
         
         output, out_features = model.feature_list(Variable(adv_data, volatile=True))
         X_act_adv = []
         for i in range(num_output):
             out_features[i] = out_features[i].view(out_features[i].size(0), out_features[i].size(1), -1)
             out_features[i] = torch.mean(out_features[i].data, 2)
-            X_act_adv.append(np.asarray(out_features[i], dtype=np.float32).reshape((out_features[i].size(0), -1)))
+            X_act_adv.append(np.asarray(out_features[i].cpu(), dtype=np.float32).reshape((out_features[i].size(0), -1)))
 
         output, out_features = model.feature_list(Variable(noisy_data, volatile=True))
         X_act_noisy = []
         for i in range(num_output):
             out_features[i] = out_features[i].view(out_features[i].size(0), out_features[i].size(1), -1)
             out_features[i] = torch.mean(out_features[i].data, 2)
-            X_act_noisy.append(np.asarray(out_features[i], dtype=np.float32).reshape((out_features[i].size(0), -1)))
+            X_act_noisy.append(np.asarray(out_features[i].cpu(), dtype=np.float32).reshape((out_features[i].size(0), -1)))
         
         # LID
         list_counter = 0 

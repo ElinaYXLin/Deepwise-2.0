@@ -63,7 +63,7 @@ def fgs(model, input, target, step_size=0.1, train_mode=False, mode=None, verbos
     output = model(input_var)
     if is_gpu:
         cpu_targets = target.clone()
-        target = target.cuda(async=True)
+        target = target.cuda(non_blocking=True)
     else:
         cpu_targets = target
     target_var = torch.autograd.Variable(target)
@@ -204,7 +204,8 @@ def deepfool_single(model, imgs, target, n_classes, train_mode, max_iter=50,
         min_w = w[min_idx[0]]
         min_norm = w_norm[min_idx[0]].data
         min_ratio = min_ratio[0]
-        min_norm = min_norm[0]
+        # min_norm = min_norm[0] # newly commented
+
         ri = min_ratio / min_norm * step_size * min_w
         imgs_var2 = imgs_var2.add(ri)
         r = r.add(ri.data)
@@ -212,9 +213,11 @@ def deepfool_single(model, imgs, target, n_classes, train_mode, max_iter=50,
                                                 imgs_var2.size(1), imgs_var2.size(2))
         output2 = model.forward(imgs_var_in).clone()
         _, pred2 = output2.data.cpu().max(1)
-        pred2 = pred2.squeeze()[0]
+        # pred2 = pred2.squeeze()[0] # original
+        pred2 = pred2.squeeze() # new
         diff = torch.norm(imgs_var - imgs_var2) / torch.norm(imgs_var)
-        diff = diff.data[0]
+        # diff = diff.data[0] #original
+        diff = diff.data # new
         if verbose:
             print('iteration ' + str(m + 1) +
                   ': perturbation norm ratio = ' + str(diff))
@@ -240,7 +243,7 @@ def deepfool(model, input, target, n_classes, train_mode=False, max_iter=5,
             model, input[i], target[i], n_classes, train_mode,
             max_iter, step_size, batch_size, labels)
     status = 2 * status - 1
-    status[pred.ne(target)] = 0
+    status[pred.ne(target.cpu())] = 0
     return (status, r)
 
 
@@ -285,7 +288,7 @@ def cw(model, input, target, weight, loss_str, bound=0, tv_weight=0,
         model.train()
     else:
         model.eval()
-    pred = util.get_labels(model, input)
+    pred = util.get_labels(model, input).cuda()
     corr = pred.eq(target)
     w = torch.autograd.Variable(input, requires_grad=True)
     best_w = torch.Tensor(input.size())
@@ -314,7 +317,8 @@ def cw(model, input, target, weight, loss_str, bound=0, tv_weight=0,
             loss = torch.clamp((w - input_var).abs() - bound, min=0).sum()
         else:
             raise ValueError('Unsupported loss: %s' % loss_str)
-        recons_loss = loss.data[0]
+        # recons_loss = loss.data[0] # original 
+        recons_loss = loss.data # new
         w_data = w.data
         if crop_frac < 1 and i % 3 == 1:
             w_cropped = torch.zeros(
@@ -340,7 +344,8 @@ def cw(model, input, target, weight, loss_str, bound=0, tv_weight=0,
         for j in range(output.size(0)):
             loss += weight * torch.clamp(
                 output[j][target[j]] - output[j][argmax[j]] + kappa, min=0)
-        adv_loss = loss.data[0] - recons_loss
+        # adv_loss = loss.data[0] - recons_loss # original
+        adv_loss = loss - recons_loss # new
         if is_gpu:
             loss = loss.cuda()
         loss.backward()
@@ -370,7 +375,8 @@ def cw(model, input, target, weight, loss_str, bound=0, tv_weight=0,
                         minimize_tv.tv_dx(w_cpu[j, k] - input_np[j, k], p))
                     w.grad.data[j, k].add_(grad.float())
         optimizer.step()
-        total_loss = loss.data.cpu()[0] + tv_loss
+        # total_loss = loss.data.cpu()[0] + tv_loss
+        total_loss = loss.data.cpu() + tv_loss
         # w.data = utils.img_to_tensor(utils.transform_img(w.data), scale=False)
         output_vec = w.data
         preds = util.get_labels(model, output_vec)
@@ -378,6 +384,7 @@ def cw(model, input, target, weight, loss_str, bound=0, tv_weight=0,
         diff = (input_vec - output_vec).norm(2, 1).squeeze()
         diff = diff.div(input_vec.norm(2, 1).squeeze())
         rb = diff.mean()
+        preds = preds.cuda() # new
         sr = float(preds.ne(target).sum()) / target.size(0)
         if verbose:
             print('iteration %d: loss = %f, %s_loss = %f, '
@@ -389,6 +396,8 @@ def cw(model, input, target, weight, loss_str, bound=0, tv_weight=0,
             best_w = w.data.clone()
     pred_xp = util.get_labels(model, best_w)
     status = torch.zeros(input.size(0)).long()
+    status = status.cuda() # new
+    pred_xp = pred_xp.cuda() # new
     status[corr] = 2 * pred[corr].ne(pred_xp[corr]).long() - 1
     return (status, best_w)
 
